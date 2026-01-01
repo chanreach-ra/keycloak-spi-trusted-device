@@ -108,6 +108,21 @@ public class RegisterTrustedDeviceAuthenticator implements Authenticator {
 
       trustedDeviceCredentialProvider.removeExpiredCredentials(realm, user);
 
+      // Remove any existing credentials with the same device name to handle the case
+      // where the user has cleared their cookies but the old credential still exists
+      user.credentialManager()
+          .getStoredCredentialsByTypeStream(TrustedDeviceCredentialModel.TYPE_TWOFACTOR)
+          .filter(cred -> {
+            TrustedDeviceCredentialModel model = TrustedDeviceCredentialModel.createFromCredentialModel(cred);
+            String existingLabel = model.getUserLabel();
+            // Extract device name from label (handles both "Device" and "Device (Expires: ...)" formats)
+            String existingDeviceName = existingLabel.contains(" (Expires: ")
+                ? existingLabel.substring(0, existingLabel.indexOf(" (Expires: "))
+                : existingLabel;
+            return deviceName.equals(existingDeviceName);
+          })
+          .forEach(cred -> user.credentialManager().removeStoredCredentialById(cred.getId()));
+
       // Add the new credential
       CredentialModel credential = trustedDeviceCredentialProvider.createCredential(realm, user,
           trustedDeviceCredentialModel);
