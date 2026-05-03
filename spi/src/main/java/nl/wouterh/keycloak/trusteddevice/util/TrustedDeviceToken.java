@@ -1,9 +1,9 @@
 package nl.wouterh.keycloak.trusteddevice.util;
 
-import jakarta.ws.rs.core.NewCookie;
-import jakarta.ws.rs.core.UriBuilder;
-import jakarta.ws.rs.core.NewCookie.SameSite;
 import jakarta.ws.rs.core.Cookie;
+import jakarta.ws.rs.core.NewCookie;
+import jakarta.ws.rs.core.NewCookie.SameSite;
+import jakarta.ws.rs.core.UriBuilder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -37,15 +37,14 @@ public class TrustedDeviceToken extends JsonWebToken {
     String path = baseUriBuilder.path("realms").path(realm.getName()).path("/").build().getPath();
 
     ClientConnection connection = session.getContext().getConnection();
-    boolean secure = realm.getSslRequired().isRequired(connection);
-    SameSite sameSiteValue = secure ? SameSite.NONE : null;
     NewCookie newCookie = new NewCookie.Builder(COOKIE_NAME)
-      .maxAge(maxAge)
-      .value(value)
-      .path(path)
-      .secure(secure)
-      .sameSite(sameSiteValue)
-      .build();
+        .maxAge(maxAge)
+        .value(value)
+        .path(path)
+        .secure(true)
+        .httpOnly(true)
+        .sameSite(SameSite.NONE)
+        .build();
 
     session.getContext().getHttpResponse().setCookieIfAbsent(newCookie);
   }
@@ -57,12 +56,13 @@ public class TrustedDeviceToken extends JsonWebToken {
     if (cookie == null) {
       return null;
     }
-    
-    TrustedDeviceToken decoded = session.tokens().decode(cookie.getValue(), TrustedDeviceToken.class);
+
+    TrustedDeviceToken decoded = session.tokens()
+        .decode(cookie.getValue(), TrustedDeviceToken.class);
     if (decoded != null && (decoded.getExp() == null || decoded.getExp() > time)) {
       return decoded;
     }
-    
+
     return null;
   }
 
