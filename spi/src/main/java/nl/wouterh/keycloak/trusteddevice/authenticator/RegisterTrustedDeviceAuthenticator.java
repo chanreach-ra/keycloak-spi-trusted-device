@@ -3,14 +3,16 @@ package nl.wouterh.keycloak.trusteddevice.authenticator;
 import static nl.wouterh.keycloak.trusteddevice.authenticator.RegisterTrustedDeviceAuthenticatorFactory.CONF_DURATION;
 
 import com.google.common.base.Strings;
+import jakarta.ws.rs.core.MultivaluedMap;
+import jakarta.ws.rs.core.Response;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
-import jakarta.ws.rs.core.MultivaluedMap;
-import jakarta.ws.rs.core.Response;
+import java.util.Set;
+import java.util.stream.Collectors;
 import nl.wouterh.keycloak.trusteddevice.credential.TrustedDeviceCredentialModel;
 import nl.wouterh.keycloak.trusteddevice.credential.TrustedDeviceCredentialProvider;
 import nl.wouterh.keycloak.trusteddevice.credential.TrustedDeviceCredentialProviderFactory;
@@ -103,25 +105,25 @@ public class RegisterTrustedDeviceAuthenticator implements Authenticator {
             formatter.format(Instant.ofEpochSecond(exp)));
       }
 
+      Set<String> existingCredentials = user.credentialManager()
+          .getStoredCredentialsByTypeStream(TrustedDeviceCredentialModel.TYPE_TWOFACTOR)
+          .map(CredentialModel::getUserLabel)
+          .collect(Collectors.toSet());
+
+      {
+        // Suffix the credentialName with a number to make it unique
+        int suffix = 2;
+        final String originalCredentialName = credentialName;
+        while (existingCredentials.contains(credentialName)) {
+          credentialName = originalCredentialName + " " + suffix;
+          suffix++;
+        }
+      }
+
       TrustedDeviceCredentialModel trustedDeviceCredentialModel = TrustedDeviceCredentialModel.create(
           credentialName, deviceId, exp);
 
       trustedDeviceCredentialProvider.removeExpiredCredentials(realm, user);
-
-      // Remove any existing credentials with the same device name to handle the case
-      // where the user has cleared their cookies but the old credential still exists
-      user.credentialManager()
-          .getStoredCredentialsByTypeStream(TrustedDeviceCredentialModel.TYPE_TWOFACTOR)
-          .filter(cred -> {
-            TrustedDeviceCredentialModel model = TrustedDeviceCredentialModel.createFromCredentialModel(cred);
-            String existingLabel = model.getUserLabel();
-            // Extract device name from label (handles both "Device" and "Device (Expires: ...)" formats)
-            String existingDeviceName = existingLabel.contains(" (Expires: ")
-                ? existingLabel.substring(0, existingLabel.indexOf(" (Expires: "))
-                : existingLabel;
-            return deviceName.equals(existingDeviceName);
-          })
-          .forEach(cred -> user.credentialManager().removeStoredCredentialById(cred.getId()));
 
       // Add the new credential
       CredentialModel credential = trustedDeviceCredentialProvider.createCredential(realm, user,
