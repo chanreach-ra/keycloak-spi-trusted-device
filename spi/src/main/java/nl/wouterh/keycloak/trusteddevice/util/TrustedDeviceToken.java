@@ -43,7 +43,7 @@ public class TrustedDeviceToken extends JsonWebToken {
         .path(path)
         .secure(true)
         .httpOnly(true)
-        .sameSite(SameSite.NONE)
+        .sameSite(SameSite.LAX)
         .build();
 
     session.getContext().getHttpResponse().setCookieIfAbsent(newCookie);
